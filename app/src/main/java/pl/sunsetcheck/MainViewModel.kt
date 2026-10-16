@@ -24,6 +24,7 @@ class MainViewModel : ViewModel() {
     var lon by mutableDoubleStateOf(19.4)
         private set
     var dayOffset by mutableIntStateOf(0)
+    var event by mutableStateOf(SunEvent.SUNSET)
     var recenter by mutableIntStateOf(0)
         private set
     var state by mutableStateOf<UiState>(UiState.Idle)
@@ -45,7 +46,7 @@ class MainViewModel : ViewModel() {
         job = viewModelScope.launch {
             state = try {
                 val date = LocalDate.now(Solar.ZONE).plusDays(dayOffset.toLong())
-                UiState.Done(Analyzer.analyze(lat, lon, date))
+                UiState.Done(Analyzer.analyze(lat, lon, date, event))
             } catch (e: AnalysisException) {
                 UiState.Error(e.message ?: "Błąd analizy")
             } catch (e: kotlin.coroutines.cancellation.CancellationException) {

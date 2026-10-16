@@ -74,8 +74,8 @@ fun SunsetScene(a: Analysis, modifier: Modifier = Modifier) {
         val horizon = h * 0.74f
 
         val top = lerp(Color(0xFF2B3345), Color(0xFF1B1F4B), clear)
-        val mid = lerp(Color(0xFF4A4F5E), Color(0xFF8E3B6E), clear)
-        val bot = lerp(Color(0xFF8C8F99), Color(0xFFFF8A3D), clear)
+        val mid = lerp(Color(0xFF4A4F5E), if (a.event == SunEvent.SUNRISE) Color(0xFFA64F8A) else Color(0xFF8E3B6E), clear)
+        val bot = lerp(Color(0xFF8C8F99), if (a.event == SunEvent.SUNRISE) Color(0xFFFFA9A0) else Color(0xFFFF8A3D), clear)
         drawRect(Brush.verticalGradient(listOf(top, mid, bot), 0f, horizon), size = Size(w, horizon))
 
         // słońce + poświata
@@ -121,9 +121,9 @@ fun SunsetScene(a: Analysis, modifier: Modifier = Modifier) {
 
 @Composable
 fun SkyDome(a: Analysis) {
-    var viewAz by remember(a) { mutableFloatStateOf(a.sunsetAzimuth.toFloat()) }
+    var viewAz by remember(a) { mutableFloatStateOf(a.eventAzimuth.toFloat()) }
     var pitch by remember(a) { mutableFloatStateOf(0.55f) }
-    val sunsetIdx = a.sunPath.indexOfLast { it.epochMs <= a.sunsetEpochMs }.coerceAtLeast(0)
+    val sunsetIdx = a.sunPath.indexOfLast { it.epochMs <= a.eventEpochMs }.coerceAtLeast(0)
     var tSlider by remember(a) { mutableFloatStateOf(sunsetIdx.toFloat() / max(1, a.sunPath.lastIndex)) }
     val paint = remember {
         AndroidPaint().apply {
@@ -189,7 +189,7 @@ fun SkyDome(a: Analysis) {
             }
 
             // kierunek zachodu
-            val tip = pr(a.sunsetAzimuth, 0.0)
+            val tip = pr(a.eventAzimuth, 0.0)
             drawLine(Color(0xFFFF8A3D), Offset(cx, cy), tip, strokeWidth = 5f, cap = StrokeCap.Round)
 
             // ścieżka słońca
@@ -221,8 +221,8 @@ fun SkyDome(a: Analysis) {
             }
             paint.color = android.graphics.Color.rgb(255, 138, 61)
             paint.textSize = 12.sp.toPx()
-            val lbl = pr(a.sunsetAzimuth, 0.0, 1.3)
-            drawContext.canvas.nativeCanvas.drawText("zachód ${a.sunsetAzimuth.roundToInt()}°", lbl.x, lbl.y + 4f, paint)
+            val lbl = pr(a.eventAzimuth, 0.0, 1.3)
+            drawContext.canvas.nativeCanvas.drawText("${a.event.label} ${a.eventAzimuth.roundToInt()}°", lbl.x, lbl.y + 4f, paint)
 
             // wybrane położenie słońca + rzut pionowy na horyzont
             val sunO = pr(sel.azimuth, sel.elevation)

@@ -84,11 +84,11 @@ fun App(vm: MainViewModel = viewModel()) {
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             Text("SunsetCheck", fontSize = 26.sp, fontWeight = FontWeight.Black, color = SunYellow)
-            Text("Czy zobaczę zachód słońca? Dotknij mapy, aby wybrać punkt.", fontSize = 13.sp, color = Color(0xFFB8C0E0))
+            Text("Czy zobaczę zachód lub wschód słońca? Dotknij mapy, aby wybrać punkt.", fontSize = 13.sp, color = Color(0xFFB8C0E0))
         }
 
         MapPicker(
-            lat = vm.lat, lon = vm.lon, azimuth = analysis?.sunsetAzimuth, recenter = vm.recenter,
+            lat = vm.lat, lon = vm.lon, azimuth = analysis?.eventAzimuth, recenter = vm.recenter,
             onPick = { la, lo -> vm.pick(la, lo) },
             modifier = Modifier
                 .padding(horizontal = 12.dp)
@@ -96,6 +96,22 @@ fun App(vm: MainViewModel = viewModel()) {
                 .height(230.dp)
                 .clip(RoundedCornerShape(20.dp))
         )
+
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = vm.event == SunEvent.SUNSET,
+                onClick = { vm.event = SunEvent.SUNSET; vm.pick(vm.lat, vm.lon) },
+                label = { Text("🌇 Zachód") }
+            )
+            FilterChip(
+                selected = vm.event == SunEvent.SUNRISE,
+                onClick = { vm.event = SunEvent.SUNRISE; vm.pick(vm.lat, vm.lon) },
+                label = { Text("🌅 Wschód") }
+            )
+        }
 
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -130,7 +146,7 @@ fun App(vm: MainViewModel = viewModel()) {
                 onClick = { vm.analyze() },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 enabled = vm.state !is UiState.Loading
-            ) { Text("Analizuj zachód słońca", fontWeight = FontWeight.Bold) }
+            ) { Text("Analizuj ${vm.event.label} słońca", fontWeight = FontWeight.Bold) }
 
             when (val s = vm.state) {
                 UiState.Idle -> {}

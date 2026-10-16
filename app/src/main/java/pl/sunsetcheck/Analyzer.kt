@@ -25,8 +25,8 @@ data class Analysis(
     val lat: Double,
     val lon: Double,
     val observerElevationM: Double?,
-    val sunsetEpochMs: Long,
-    val sunsetAzimuth: Double,
+    val eventEpochMs: Long,
+    val eventAzimuth: Double,
     val horizonDeg: Double,
     val terrainKnown: Boolean,
     val evalElevationDeg: Double,
@@ -44,7 +44,9 @@ data class Analysis(
     val avgHigh: Double,
     val cross: List<CloudSample>,
     val sunPath: List<SunSample>,
-    val leadHours: Double
+    val leadHours: Double,
+    val event: SunEvent,
+    val confidencePct: Int
 )
 
 class AnalysisException(msg: String) : Exception(msg)
@@ -135,10 +137,10 @@ object Analyzer {
         )
     }
 
-    suspend fun analyze(lat: Double, lon: Double, date: LocalDate): Analysis = coroutineScope {
-        val sunset = Solar.sunset(date, lat, lon) ?: throw AnalysisException("Brak zachodu słońca w tej dacie.")
+    suspend fun analyze(lat: Double, lon: Double, date: LocalDate, event: SunEvent = SunEvent.SUNSET): Analysis = coroutineScope {
+        val sunset = Solar.event(event, date, lat, lon) ?: throw AnalysisException("Brak ${event.nounGen} słońca w tej dacie.")
         val now = System.currentTimeMillis()
-        if (sunset < now) throw AnalysisException("Zachód słońca tego dnia już minął – wybierz jutro.")
+        if (sunset < now) throw AnalysisException("${event.label.replaceFirstChar { it.uppercase() }} słońca w tym dniu już minął – wybierz późniejszy dzień.")
         val az = Solar.position(sunset, lat, lon).azimuthDeg
 
         // --- horyzont terenowy w kierunku zachodu ---
@@ -170,7 +172,7 @@ object Analyzer {
             async { name to OpenMeteo.forecast(id, cp.map { it.first }, cp.map { it.second }) }
         }.awaitAll()
 
-        val tSec = sunset / 1000L - 600L // ~10 min przed zachodem: Słońce ~1–2° nad horyzontem
+        val tSec = if (event == SunEvent.SUNSET) sunset / 1000L - 600L else sunset / 1000L + 600L // Słońce ~1–2° nad horyzontem
         val results = ArrayList<ModelResult>()
         val failed = ArrayList<String>()
         for ((name, series) in fetched) {
@@ -201,10 +203,10 @@ object Analyzer {
         val vis = results.mapNotNull { it.visibilityKm }.minOrNull()
 
         val verdict = when {
-            score >= 80 && confidence != Confidence.LOW -> "Bardzo dobre szanse na widoczny zachód"
+            score >= 80 && confidence != Confidence.LOW -> "Bardzo dobre szanse na widoczny ${event.label}"
             score >= 60 -> "Dobre szanse, ale bez gwarancji"
             score >= 35 -> "Niepewnie – chmury mogą zasłonić słońce"
-            else -> "Raczej nie zobaczysz zachodu"
+            else -> "Raczej nie zobaczysz ${event.nounGen}"
         }
 
         fun pct(x: Double) = "${(x * 100).roundToInt()}%"
@@ -213,7 +215,7 @@ object Analyzer {
         reasons.add("Chmury średnie: ${pct(avgMid)}, wysokie (cienkie, słabiej blokują): ${pct(avgHigh)}")
         if (precip >= 0.1) reasons.add("Możliwe opady w kierunku zachodu (do ${"%.1f".format(precip)} mm/h)")
         if (vis != null && vis < 8.0) reasons.add("Ograniczona widzialność przy gruncie: ${"%.1f".format(vis)} km (mgła/zamglenie)")
-        if (horizon >= 0.3) reasons.add("Teren/zabudowa zasłania horyzont do ok. ${"%.1f".format(horizon)}° – tarcza zniknie przed „prawdziwym” zachodem")
+        if (horizon >= 0.3) reasons.add("Teren/zabudowa zasłania horyzont do ok. ${"%.1f".format(horizon)}° – tarcza ${if (event == SunEvent.SUNSET) "zniknie przed" else "pojawi się dopiero po"} „prawdziwym” ${event.nounGen}")
         if (!terrainKnown) reasons.add("Brak danych o terenie – założono płaski horyzont")
         if (spread > 0.25) reasons.add("Modele się rozchodzą (${sMin}–${sMax}%) – prognoza niepewna")
         if (leadH > 48) reasons.add("Prognoza na ponad 2 doby – niska wiarygodność szczegółów")
@@ -229,13 +231,14 @@ object Analyzer {
 
         Analysis(
             lat = lat, lon = lon, observerElevationM = obsElev,
-            sunsetEpochMs = sunset, sunsetAzimuth = az, horizonDeg = horizon, terrainKnown = terrainKnown,
+            eventEpochMs = sunset, eventAzimuth = az, horizonDeg = horizon, terrainKnown = terrainKnown,
             evalElevationDeg = e, models = results, failedModels = failed,
             score = score, scoreMin = sMin, scoreMax = sMax, confidence = confidence,
             colorPotential = (results.map { it.color }.average() * 100).roundToInt(),
             verdict = verdict, reasons = reasons,
             avgLow = avgLow, avgMid = avgMid, avgHigh = avgHigh,
-            cross = cross, sunPath = Solar.sunPath(date, lat, lon), leadHours = leadH
+            cross = cross, sunPath = Solar.sunPath(date, lat, lon), leadHours = leadH,
+            event = event, confidencePct = (conf * 100).roundToInt().coerceIn(5, 95)
         )
     }
 }

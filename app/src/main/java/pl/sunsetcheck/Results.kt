@@ -1,6 +1,17 @@
 package pl.sunsetcheck
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.*
@@ -39,6 +50,20 @@ fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
 fun Results(a: Analysis) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Hero(a)
+
+        SectionCard("Wskaźniki") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                PercentGauge(a.score, "szansa", 92.dp, 8.dp)
+                PercentGauge(a.confidencePct, "pewność", 92.dp, 8.dp)
+                PercentGauge(a.colorPotential, "barwy", 92.dp, 8.dp)
+                PercentGauge(((1 - a.avgLow) * 100).roundToInt().coerceIn(0, 100), "czyste niskie", 92.dp, 8.dp)
+            }
+            Text(
+                "Szansa = prawdopodobieństwo widoczności tarczy słońca. Pewność = zgodność modeli i horyzont prognozy. " +
+                    "Barwy = potencjał kolorowego nieba. Nigdy nie pokazujemy 100% – to prognoza, nie gwarancja.",
+                color = Dim, fontSize = 12.sp
+            )
+        }
 
         SectionCard("Dlaczego nie ma „100%”?") {
             Text(
@@ -85,7 +110,7 @@ fun Results(a: Analysis) {
         }
 
         SectionCard("Szczegóły") {
-            Text("Zachód: ${fmtTime(a.sunsetEpochMs)}, azymut ${a.sunsetAzimuth.roundToInt()}°", fontSize = 13.sp)
+            Text("${a.event.label.cap()}: ${fmtTime(a.eventEpochMs)}, azymut ${a.eventAzimuth.roundToInt()}°", fontSize = 13.sp)
             Text(
                 "Horyzont terenowy: ${"%.1f".format(a.horizonDeg)}°" +
                     (a.observerElevationM?.let { ", wysokość punktu: ${it.roundToInt()} m n.p.m." } ?: ""),
@@ -121,18 +146,42 @@ private fun LayerBar(label: String, v: Double) {
 }
 
 @Composable
+fun PercentGauge(percent: Int, label: String, diameter: Dp, stroke: Dp, big: Boolean = false) {
+    val anim by animateFloatAsState(percent / 100f, tween(900), label = "gauge")
+    val col = barColor(percent / 100.0)
+    Box(Modifier.size(diameter), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val sw = stroke.toPx()
+            val arcSize = Size(this.size.width - sw, this.size.height - sw)
+            val tl = Offset(sw / 2, sw / 2)
+            drawArc(Color(0x33FFFFFF), 135f, 270f, false, tl, arcSize, style = Stroke(sw, cap = StrokeCap.Round))
+            drawArc(col, 135f, 270f * anim, false, tl, arcSize, style = Stroke(sw, cap = StrokeCap.Round))
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "$percent%",
+                style = TextStyle(fontSize = if (big) 30.sp else 16.sp, fontWeight = FontWeight.Black, color = Color.White)
+            )
+            Text(label, style = TextStyle(fontSize = if (big) 11.sp else 10.sp, color = Color(0xFFD5DAF0)))
+        }
+    }
+}
+
+private fun String.cap() = replaceFirstChar { it.uppercase() }
+
+@Composable
 private fun Hero(a: Analysis) {
     Box(Modifier.fillMaxWidth().height(270.dp).clip(RoundedCornerShape(24.dp))) {
         SunsetScene(a, Modifier.fillMaxSize())
         val shadow = Shadow(Color.Black, blurRadius = 10f)
-        Column(Modifier.align(Alignment.TopStart).padding(16.dp)) {
-            Text("${a.score}", style = TextStyle(fontSize = 64.sp, fontWeight = FontWeight.Black, color = Color.White, shadow = shadow))
-            Text("/100 szans na widoczny zachód", style = TextStyle(fontSize = 13.sp, color = Color.White, shadow = shadow))
-        }
+        Box(
+            Modifier.align(Alignment.TopStart).padding(14.dp)
+                .background(Color(0x66000000), CircleShape).padding(6.dp)
+        ) { PercentGauge(a.score, "szansa", 112.dp, 10.dp, big = true) }
         Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
             Text(a.verdict, style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White, shadow = shadow))
             Text(
-                "Zachód ${fmtTime(a.sunsetEpochMs)} • azymut ${a.sunsetAzimuth.roundToInt()}° • pewność prognozy: ${a.confidence.label}",
+                "${a.event.label.cap()} ${fmtTime(a.eventEpochMs)} • azymut ${a.eventAzimuth.roundToInt()}° • pewność prognozy: ${a.confidence.label}",
                 style = TextStyle(fontSize = 12.sp, color = Color.White, shadow = shadow)
             )
         }

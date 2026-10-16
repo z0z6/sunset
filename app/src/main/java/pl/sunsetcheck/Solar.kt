@@ -4,6 +4,11 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.*
 
+enum class SunEvent(val label: String, val nounGen: String) {
+    SUNSET("zachód", "zachodu"),
+    SUNRISE("wschód", "wschodu")
+}
+
 data class SunPos(val azimuthDeg: Double, val elevationDeg: Double)
 data class SunSample(val epochMs: Long, val azimuth: Double, val elevation: Double)
 
@@ -49,6 +54,25 @@ object Solar {
         }
         return null
     }
+
+    /** Moment wschodu (środek tarczy przekracza -0.833° w górę). */
+    fun sunrise(date: LocalDate, lat: Double, lon: Double): Long? {
+        val start = date.atStartOfDay(ZONE).toInstant().toEpochMilli()
+        val end = start + 14 * 3600_000L
+        var t = start
+        var prev = position(t, lat, lon).elevationDeg
+        while (t < end) {
+            val nt = t + 60_000L
+            val e = position(nt, lat, lon).elevationDeg
+            if (prev <= -0.833 && e > -0.833) return nt
+            prev = e
+            t = nt
+        }
+        return null
+    }
+
+    fun event(ev: SunEvent, date: LocalDate, lat: Double, lon: Double): Long? =
+        if (ev == SunEvent.SUNSET) sunset(date, lat, lon) else sunrise(date, lat, lon)
 
     fun sunPath(date: LocalDate, lat: Double, lon: Double): List<SunSample> {
         val start = date.atStartOfDay(ZONE).toInstant().toEpochMilli()
